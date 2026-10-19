@@ -1,4 +1,4 @@
-name: Build BT-R320 GPT-V1.0
+name: Build BT-R320 GPT
 
 on:
   workflow_dispatch:
