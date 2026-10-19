@@ -1,0 +1,79 @@
+name: Build BT-R320 GPT
+
+on:
+  workflow_dispatch:
+    inputs:
+      sdmmc:
+        description: 'SDMMC mode (eMMC)'
+        default: '1'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install python2 + deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python2 python2-dev swig
+
+      - name: Make scripts executable
+        run: chmod +x generate_gpt.sh
+
+      - name: Generate GPT
+        run: |
+          if [ "${{ github.event.inputs.sdmmc }}" = "1" ]; then
+            SDMMC=1 ./generate_gpt.sh
+          else
+            ./generate_gpt.sh
+          fi
+
+      - name: Upload GPT bins
+        uses: actions/upload-artifact@v4
+        with:
+          name: bt-r320-gpt
+          path: output_gpt/**/*.bin
+
+  # 新增：构建完成后自动发布到 GitHub Releases
+  release:
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Make tag
+        id: make_tag
+        run: echo "tag=gpt-$(date +'%Y%m%d-%H%M%S')" >> "$GITHUB_OUTPUT"
+
+      - name: Download GPT bins
+        uses: actions/download-artifact@v4
+        with:
+          name: bt-r320-gpt
+          path: release-artifacts
+
+      - name: Generate checksum
+        run: find release-artifacts -name '*.bin' -exec sha256sum {} \; > release-artifacts/sha256sums.txt
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.make_tag.outputs.tag }}
+          name: BT-R320 GPT ${{ steps.make_tag.outputs.tag }}
+          body: |
+            ## 自动构建的 BT-R320 GPT 文件
+
+            - 触发方式: 手动 workflow_dispatch
+            - 构建环境: ubuntu-22.04
+            - SDMMC 模式: ${{ github.event.inputs.sdmmc }}
+
+            **刷写须知**:
+            1. 刷 GPT 后必须加载 initramfs 再 `sysupgrade -n` 重刷固件，否则卡死
+            2. 不要改动 `factory` 分区，内含无线校准和 MAC
+            3. 新版固件需配合新版 FIP 使用
+          files: |
+            release-artifacts/**/*.bin
+            release-artifacts/sha256sums.txt
