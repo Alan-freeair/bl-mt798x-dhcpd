@@ -23,7 +23,7 @@
   "rootfs": {
     "start": 82944,
     "end": 4277247
-  }
+  },
   "production": {
     "start": 4277248,
     "end": 5325823
